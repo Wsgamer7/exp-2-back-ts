@@ -2,27 +2,27 @@ import { OpenAPIHono, z } from "@hono/zod-openapi";
 import { geneRoute } from "./utils/openapi";
 import { cors } from "hono/cors";
 import { auth } from "./utils/auth";
-import {
-  projectSchema,
-  expSchema,
-  respErrSchema,
-  Project,
-  Exp,
-} from "./schema";
-import {
-  createProject,
-  getProjectsByUserId,
-  updateProject,
-  deleteProject,
-  createExp,
-  getExpsByProjectId,
-  updateExp,
-  deleteExp,
-  getExpById,
-  getProjectById,
-} from "./service/project";
-import llmService from "./service/llm";
 import { Context } from "hono";
+
+// Import poll service functions
+import {
+  createPoll,
+  updatePoll,
+  deletePoll,
+  listPolls,
+  votePoll,
+  tagPoll,
+  untagPoll,
+  getPollTags,
+  getAllTags,
+  searchPollsByTag,
+  searchPolls,
+  addPollOption,
+  deletePollOption,
+} from "./service/poll";
+
+// Import schemas
+import { pollSchema, voteSchema, tagSchema, pollOptionSchema } from "./schema";
 
 const app = new OpenAPIHono<{
   Variables: {
@@ -66,23 +66,6 @@ app.use("*", async (c, next) => {
 // Auth endpoints handler
 app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
 
-app.openapi(
-  geneRoute({
-    path: "/login/check",
-    reqSchema: z.object({}),
-    resSchema: z.object({
-      hasLogin: z.boolean(),
-    }),
-  }),
-  async (c) => {
-    const userId = c.var.user?.id;
-    if (!userId) {
-      return c.json({ hasLogin: false });
-    }
-    return c.json({ hasLogin: true });
-  }
-);
-
 const getUserId = (c: Context): string => {
   const userId = c.var?.user?.id;
   if (!userId) {
@@ -91,80 +74,56 @@ const getUserId = (c: Context): string => {
   return userId;
 };
 
-app.openapi(
-  geneRoute({
-    path: "/project/create",
-    reqSchema: z.object({}),
-    resSchema: z.object({
-      project: projectSchema.optional(),
-    }),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const project = await createProject({ userId });
-    return c.json({ project });
-  }
-);
+// Poll API Routes
 
+// Create a poll
 app.openapi(
   geneRoute({
-    path: "/project/get",
-    reqSchema: z.object({}),
-    resSchema: z.object({
-      projects: z.array(projectSchema).optional(),
-    }),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const projects = await getProjectsByUserId(userId);
-    return c.json({ projects });
-  }
-);
-
-app.openapi(
-  geneRoute({
-    path: "/project/getById",
+    path: "/poll/create",
     reqSchema: z.object({
-      projectId: z.string(),
+      poll: pollSchema,
     }),
     resSchema: z.object({
-      project: projectSchema.optional(),
+      poll: pollSchema.optional(),
     }),
   }),
   async (c) => {
     const userId = getUserId(c);
-    const { projectId } = c.req.valid("json");
-    const project = await getProjectById({ userId, projectId });
-    return c.json({ project });
+    const { poll } = c.req.valid("json");
+    // Ensure userId is set in the poll
+    poll.userId = userId;
+    const createdPoll = await createPoll(poll);
+    return c.json({ poll: createdPoll });
   }
 );
 
+// Update a poll
 app.openapi(
   geneRoute({
-    path: "/project/update",
+    path: "/poll/update",
     reqSchema: z.object({
-      project: projectSchema,
+      poll: pollSchema,
     }),
     resSchema: z.object({
-      project: projectSchema.optional(),
+      poll: pollSchema.optional(),
     }),
   }),
   async (c) => {
     const userId = getUserId(c);
-    const { project } = c.req.valid("json");
-    const updatedProject = await updateProject({
-      userId,
-      project,
-    });
-    return c.json({ project: updatedProject });
+    const { poll } = c.req.valid("json");
+    // Ensure userId is set in the poll
+    poll.userId = userId;
+    const updatedPoll = await updatePoll(poll);
+    return c.json({ poll: updatedPoll });
   }
 );
 
+// Delete a poll
 app.openapi(
   geneRoute({
-    path: "/project/delete",
+    path: "/poll/delete",
     reqSchema: z.object({
-      projectId: z.string().uuid(),
+      pollId: z.string(),
     }),
     resSchema: z.object({
       success: z.boolean().optional(),
@@ -172,111 +131,57 @@ app.openapi(
   }),
   async (c) => {
     const userId = getUserId(c);
-    const { projectId } = c.req.valid("json");
-    const success = await deleteProject({ userId, projectId });
+    const { pollId } = c.req.valid("json");
+    const success = await deletePoll(pollId, userId);
     return c.json({ success });
   }
 );
 
+// List polls
 app.openapi(
   geneRoute({
-    path: "/exp/create",
+    path: "/poll/list",
     reqSchema: z.object({
-      projectId: z.string().uuid(),
+      limit: z.number().optional(),
+      offset: z.number().optional(),
     }),
     resSchema: z.object({
-      exp: expSchema.optional(),
+      polls: z.array(pollSchema).optional(),
     }),
   }),
   async (c) => {
     const userId = getUserId(c);
-    const { projectId } = c.req.valid("json");
-    const newExp = await createExp({ userId, projectId });
-    return c.json({ exp: newExp });
+    const { limit, offset } = c.req.valid("json");
+    const polls = await listPolls(userId, limit, offset);
+    return c.json({ polls });
   }
 );
 
+//add option for a poll
 app.openapi(
   geneRoute({
-    path: "/exp/create",
+    path: "/poll/addOption",
     reqSchema: z.object({
-      projectId: z.string().uuid(),
+      pollId: z.string(),
+      option: pollOptionSchema,
     }),
-    resSchema: z.object({
-      exp: expSchema.optional(),
-    }),
+    resSchema: z.object({}),
   }),
   async (c) => {
     const userId = getUserId(c);
-    const { projectId } = c.req.valid("json");
-    const newExp = await createExp({ userId, projectId });
-    return c.json({ exp: newExp });
+    const { pollId, option } = c.req.valid("json");
+    await addPollOption({ pollId, option, userId });
+    return c.json({});
   }
 );
 
+//delete option for a poll
 app.openapi(
   geneRoute({
-    path: "/exp/get",
+    path: "/poll/deleteOption",
     reqSchema: z.object({
-      projectId: z.string(),
-    }),
-    resSchema: z.object({
-      exps: z.array(expSchema).optional(),
-    }),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const { projectId } = c.req.valid("json");
-    const exps = await getExpsByProjectId({ userId, projectId });
-    return c.json({ exps });
-  }
-);
-
-app.openapi(
-  geneRoute({
-    path: "/exp/update",
-    reqSchema: z.object({
-      id: z.string().uuid(),
-      title: z.string().optional(),
-      content: z.string().optional(),
-    }),
-    resSchema: z.object({
-      exp: expSchema.optional(),
-    }),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const { id, title, content } = c.req.valid("json");
-    const updatedExp = await updateExp({ userId, expId: id, title, content });
-    return c.json({ exp: updatedExp });
-  }
-);
-
-app.openapi(
-  geneRoute({
-    path: "/exp/update",
-    reqSchema: z.object({
-      id: z.string().uuid(),
-      title: z.string().optional(),
-      content: z.string().optional(),
-    }),
-    resSchema: z.object({
-      exp: expSchema.optional(),
-    }),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const { id, title, content } = c.req.valid("json");
-    const updatedExp = await updateExp({ userId, expId: id, title, content });
-    return c.json({ exp: updatedExp });
-  }
-);
-
-app.openapi(
-  geneRoute({
-    path: "/exp/delete",
-    reqSchema: z.object({
-      expId: z.string().uuid(),
+      pollId: z.string(),
+      optionId: z.string(),
     }),
     resSchema: z.object({
       success: z.boolean().optional(),
@@ -284,72 +189,150 @@ app.openapi(
   }),
   async (c) => {
     const userId = getUserId(c);
-    const { expId } = c.req.valid("json");
-    const success = await deleteExp({ userId, expId });
+    const { pollId, optionId } = c.req.valid("json");
+    await deletePollOption({ pollId, optionId, userId });
+    return c.json({});
+  }
+);
+
+// Vote on a poll
+app.openapi(
+  geneRoute({
+    path: "/poll/vote",
+    reqSchema: z.object({
+      vote: voteSchema,
+    }),
+    resSchema: z.object({
+      success: z.boolean().optional(),
+    }),
+  }),
+  async (c) => {
+    const userId = getUserId(c);
+    const { vote } = c.req.valid("json");
+    // Ensure userId is set in the vote
+    vote.userId = userId;
+    const success = await votePoll(vote);
     return c.json({ success });
   }
 );
 
+// Tag a poll
 app.openapi(
   geneRoute({
-    path: "/predict/title",
+    path: "/poll/tag",
     reqSchema: z.object({
-      projectId: z.string(),
-      expId: z.string(),
-      expTitle: z.string(),
+      pollId: z.string(),
+      tag: tagSchema,
     }),
-    resSchema: z.object({
-      title: z.string().optional(),
-    }),
+    resSchema: z.object({}),
   }),
   async (c) => {
     const userId = getUserId(c);
-    const { projectId, expId, expTitle } = c.req.valid("json");
-
-    // 1. Get Project Title
-    const project = await getProjectById({ userId, projectId });
-    if (!project) {
-      throw { code: 404, message: "Project not found" };
-    }
-    const projectTitle = project.title;
-
-    // 2. Get existing experiment titles for this project
-    const exps = await getExpsByProjectId({ userId, projectId });
-    const expTitles = exps
-      .filter((exp) => exp.id !== expId)
-      .map((exp) => exp.title);
-
-    // 3. Predict new title
-    const title = await llmService.predictTitle({ projectTitle, expTitles });
-    return c.json({ title });
+    const { tag, pollId } = c.req.valid("json");
+    // Ensure userId is set in the tag, if schema expects it or tag object is reused
+    tag.userId = userId;
+    await tagPoll(pollId, tag.name, userId);
+    return c.json({});
   }
 );
 
+// Untag a poll
 app.openapi(
   geneRoute({
-    path: "/predict/content",
+    path: "/poll/untag",
     reqSchema: z.object({
-      projectId: z.string(),
-      title: z.string(),
-      content: z.string(),
+      pollId: z.string(),
+      tag: tagSchema,
     }),
     resSchema: z.object({
-      extraContent: z.string().optional(),
+      success: z.boolean().optional(),
     }),
   }),
   async (c) => {
     const userId = getUserId(c);
-    const { projectId, title, content } = c.req.valid("json");
-    const project = await getProjectById({ userId, projectId });
-    if (!project) {
-      throw { code: 404, message: "Project not found" };
+    const { tag, pollId } = c.req.valid("json");
+    tag.userId = userId; // Ensure userId is set in the tag, if schema expects it or tag object is reused
+    if (!tag.id || typeof tag.id !== "string" || tag.id.trim() === "") {
+      // TODO: Consider using HonoHttpException for a more standard error response.
+      // For now, return 200 with success:false to match the defined resSchema type.
+      return c.json({ success: false });
     }
-    // Avoid variable shadowing and ensure correct usage of llmService
-    const predictedContent = await llmService.predictContent({
-      title,
-      content,
-    });
-    return c.json({ extraContent: predictedContent });
+    const success = await untagPoll(pollId, tag.id, userId);
+    return c.json({ success });
+  }
+);
+
+// Get poll tags
+app.openapi(
+  geneRoute({
+    path: "/poll/getTags",
+    reqSchema: z.object({
+      pollId: z.string(),
+    }),
+    resSchema: z.object({
+      tags: z.array(tagSchema).optional(),
+    }),
+  }),
+  async (c) => {
+    const { pollId } = c.req.valid("json");
+    const tags = await getPollTags(pollId);
+    return c.json({ tags });
+  }
+);
+
+// Get all tags
+app.openapi(
+  geneRoute({
+    path: "/getAllTags",
+    reqSchema: z.object({}),
+    resSchema: z.object({
+      tags: z.array(tagSchema).optional(),
+    }),
+  }),
+  async (c) => {
+    const userId = getUserId(c);
+    const tags = await getAllTags(userId);
+    return c.json({ tags });
+  }
+);
+
+// Search polls by tag
+app.openapi(
+  geneRoute({
+    path: "/poll/searchByTag",
+    reqSchema: z.object({
+      tagId: z.string(),
+      limit: z.number().optional(),
+      offset: z.number().optional(),
+    }),
+    resSchema: z.object({
+      polls: z.array(pollSchema),
+    }),
+  }),
+  async (c) => {
+    const { tagId, limit, offset } = c.req.valid("json");
+    const polls = await searchPollsByTag(tagId, limit, offset);
+    return c.json({ polls });
+  }
+);
+
+// Search polls by question or option text
+app.openapi(
+  geneRoute({
+    path: "/poll/search",
+    reqSchema: z.object({
+      query: z.string(),
+      limit: z.number().optional(),
+      offset: z.number().optional(),
+    }),
+    resSchema: z.object({
+      polls: z.array(pollSchema),
+    }),
+  }),
+  async (c) => {
+    const { query, limit, offset } = c.req.valid("json");
+    const polls = await searchPolls(query, limit, offset);
+    return c.json({ polls });
   }
 );
 
@@ -357,7 +340,7 @@ app.doc("/doc", {
   openapi: "3.0.0",
   info: {
     version: "1.0.0",
-    title: "Note API",
+    title: "Poll API",
   },
 });
 

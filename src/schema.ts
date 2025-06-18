@@ -1,25 +1,50 @@
 import { z } from "@hono/zod-openapi";
 
-export const projectSchema = z
+export const pollOptionSchema = z
   .object({
-    id: z.string(),
-    title: z.string(),
-    content: z.string(),
+    id: z.string().optional(),
+    optionKey: z.string().min(1).max(2),
+    text: z.string(),
+    confidence: z.string(),
+    count: z.number(),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
   })
-  .openapi("Project");
+  .openapi("PollOption");
 
-export const expSchema = z
+export const tagSchema = z
   .object({
-    id: z.string(),
-    projectId: z.string().uuid("Invalid project ID format"), // Added projectId
-    title: z.string(),
-    content: z.string(),
+    id: z.string().optional(),
+    name: z.string(),
+    userId: z.string().optional(),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
   })
-  .openapi("Exp");
+  .openapi("PollTag");
+
+export const pollSchema = z
+  .object({
+    id: z.string().optional(),
+    question: z.string(),
+    pollOptions: z.array(pollOptionSchema),
+    extraInfo: z.string().optional(),
+    tags: z.array(tagSchema),
+    userId: z.string().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+  })
+  .openapi("Poll");
+
+export const voteSchema = z
+  .object({
+    id: z.string().optional(),
+    pollId: z.string(),
+    optionId: z.string(),
+    userId: z.string().optional(),
+    diff: z.number(),
+    createdAt: z.string().optional(),
+  })
+  .openapi("PollVote");
 
 export const respErrSchema = z
   .object({
@@ -28,6 +53,8 @@ export const respErrSchema = z
   })
   .openapi("RespErr");
 
-export type Project = z.infer<typeof projectSchema>;
-export type Exp = z.infer<typeof expSchema>;
 export type RespErr = z.infer<typeof respErrSchema>;
+export type Poll = z.infer<typeof pollSchema>;
+export type PollOption = z.infer<typeof pollOptionSchema>;
+export type Tag = z.infer<typeof tagSchema>;
+export type Vote = z.infer<typeof voteSchema>;

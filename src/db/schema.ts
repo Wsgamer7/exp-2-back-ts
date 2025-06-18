@@ -1,4 +1,14 @@
-import { text, timestamp, boolean, pgSchema, uuid } from "drizzle-orm/pg-core";
+import {
+  text,
+  timestamp,
+  boolean,
+  pgSchema,
+  uuid,
+  bigint,
+  varchar,
+  serial,
+  integer,
+} from "drizzle-orm/pg-core";
 
 const exp2Schema = pgSchema("exp_2");
 
@@ -51,4 +61,60 @@ export const verification = exp2Schema.table("verification", {
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at"),
   updatedAt: timestamp("updated_at"),
+});
+
+//app
+
+export const poll = exp2Schema.table("poll", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  question: text("question").notNull(),
+  extraInfo: text("extra_info"),
+  userId: uuid("user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+});
+
+export const pollOption = exp2Schema.table("poll_option", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  pollId: uuid("poll_id").references(() => poll.id),
+  optionKey: varchar("option_key", { length: 2 }).notNull(),
+  text: text("text").notNull(),
+  confidence: text("confidence").notNull(),
+  count: integer("count").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+});
+
+export const pollVote = exp2Schema.table("poll_vote", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  pollId: uuid("poll_id")
+    .references(() => poll.id)
+    .notNull(),
+  optionId: uuid("option_id")
+    .references(() => pollOption.id)
+    .notNull(), // Also making optionId non-nullable for consistency
+  userId: uuid("user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+});
+
+export const pollTag = exp2Schema.table("poll_tag", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: varchar("name").notNull(),
+  userId: uuid("user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+});
+
+export const pollTagMap = exp2Schema.table("poll_tag_map", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  pollId: uuid("poll_id").references(() => poll.id),
+  tagId: uuid("tag_id").references(() => pollTag.id),
+  userId: uuid("user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(), // Added updatedAt
+  isDeleted: boolean("is_deleted").notNull().default(false),
 });
