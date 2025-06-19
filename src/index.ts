@@ -10,7 +10,6 @@ import {
   updatePoll,
   deletePoll,
   listPolls,
-  votePoll,
   tagPoll,
   untagPoll,
   getPollTags,
@@ -19,6 +18,7 @@ import {
   searchPolls,
   addPollOption,
   deletePollOption,
+  voteOption,
 } from "./service/poll";
 
 // Import schemas
@@ -198,7 +198,7 @@ app.openapi(
 // Vote on a poll
 app.openapi(
   geneRoute({
-    path: "/poll/vote",
+    path: "/poll/voteOption",
     reqSchema: z.object({
       vote: voteSchema,
     }),
@@ -211,7 +211,7 @@ app.openapi(
     const { vote } = c.req.valid("json");
     // Ensure userId is set in the vote
     vote.userId = userId;
-    const success = await votePoll(vote);
+    const success = await voteOption(vote);
     return c.json({ success });
   }
 );

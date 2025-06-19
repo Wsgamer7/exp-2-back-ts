@@ -85,9 +85,7 @@ async function getPollWithRelations(pollId: string): Promise<Poll | null> {
 }
 
 // Poll的增删改查
-export async function createPoll(
-  pollData: Omit<Poll, "id" | "createdAt" | "updatedAt">
-): Promise<Poll> {
+export async function createPoll(pollData: Poll): Promise<Poll> {
   return db.transaction(async (tx) => {
     if (!pollData.userId) {
       throw new Error("userId is required to create a poll");
@@ -189,20 +187,15 @@ export async function getPollById(id: string): Promise<Poll | null> {
   return getPollWithRelations(id);
 }
 
-export async function updatePoll(
-  id: string,
-  pollUpdate: Partial<
-    Omit<Poll, "id" | "createdAt" | "updatedAt"> & { userId: string }
-  >
-): Promise<Poll | null> {
+export async function updatePoll(poll: Poll): Promise<Poll | null> {
   return db.transaction(async (tx) => {
-    if (!pollUpdate.userId) {
+    if (!poll.userId) {
       throw new Error("userId is required for update operation verification");
     }
     const currentPoll = await tx.query.poll.findFirst({
       where: and(
-        eq(schemaDb.poll.id, id),
-        eq(schemaDb.poll.userId, pollUpdate.userId),
+        eq(schemaDb.poll.id, poll.id),
+        eq(schemaDb.poll.userId, poll.userId),
         eq(schemaDb.poll.isDeleted, false)
       ),
     });
@@ -214,13 +207,13 @@ export async function updatePoll(
       tags: newTagsData,
       userId,
       ...simplePollUpdateFields
-    } = pollUpdate;
+    } = poll;
 
     if (Object.keys(simplePollUpdateFields).length > 0) {
       await tx
         .update(schemaDb.poll)
         .set({ ...simplePollUpdateFields, updatedAt: new Date() })
-        .where(eq(schemaDb.poll.id, id));
+        .where(eq(schemaDb.poll.id, poll.id));
     }
 
     if (newPollOptions) {
@@ -454,9 +447,7 @@ export async function deletePollOption({
 }
 
 // Vote一个poll
-export async function votePoll(
-  voteData: Omit<Vote, "id" | "createdAt">
-): Promise<boolean> {
+export async function voteOption(voteData: Vote): Promise<boolean> {
   return db.transaction(async (tx) => {
     if (!voteData.userId) {
       throw new Error("userId is required to vote");

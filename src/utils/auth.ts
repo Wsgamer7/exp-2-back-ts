@@ -2,11 +2,13 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db"; // your drizzle instance
 import { user, session, account, verification } from "../db/schema";
+import { openAPI } from "better-auth/plugins";
 
 const BACKEND_URL = process.env.BACKEND_URL!;
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL!;
 
 export const auth = betterAuth({
+  plugins: [openAPI()],
   socialProviders: {
     google: {
       redirectURI: `${BACKEND_URL}/api/auth/callback/google`,

@@ -6,6 +6,7 @@ export const pollOptionSchema = z
     optionKey: z.string().min(1).max(2),
     text: z.string(),
     confidence: z.string(),
+    pollId: z.string(),
     count: z.number(),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
@@ -20,7 +21,7 @@ export const tagSchema = z
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
   })
-  .openapi("PollTag");
+  .openapi("Tag");
 
 export const pollSchema = z
   .object({
