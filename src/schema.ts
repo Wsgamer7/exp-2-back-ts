@@ -3,9 +3,8 @@ import { z } from "@hono/zod-openapi";
 export const pollOptionSchema = z
   .object({
     id: z.string().optional(),
-    optionKey: z.string().min(1).max(2),
+    index: z.number(),
     text: z.string(),
-    confidence: z.string(),
     pollId: z.string(),
     count: z.number(),
     createdAt: z.string().optional(),
@@ -19,7 +18,6 @@ export const tagSchema = z
     name: z.string(),
     userId: z.string().optional(),
     createdAt: z.string().optional(),
-    updatedAt: z.string().optional(),
   })
   .openapi("Tag");
 

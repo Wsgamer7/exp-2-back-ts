@@ -15,6 +15,48 @@
       "when": 1750242858643,
       "tag": "0001_lonely_stepford_cuckoos",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1750345109093,
+      "tag": "0002_nappy_strong_guy",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1750348465697,
+      "tag": "0003_abnormal_king_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1750378436338,
+      "tag": "0004_rare_silver_sable",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1750381511387,
+      "tag": "0005_pretty_ravenous",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1750396240615,
+      "tag": "0006_hard_blue_shield",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1750397107468,
+      "tag": "0007_zippy_mandarin",
+      "breakpoints": true
     }
   ]
 }

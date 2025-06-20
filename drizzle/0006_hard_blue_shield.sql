@@ -1,0 +1,1 @@
+ALTER TABLE "exp_2"."poll_option" DROP COLUMN "confidence";

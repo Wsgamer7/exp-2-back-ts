@@ -1,0 +1,1 @@
+ALTER TABLE "exp_2"."poll_vote" ADD COLUMN "diff" integer NOT NULL;

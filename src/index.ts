@@ -6,23 +6,17 @@ import { Context } from "hono";
 
 // Import poll service functions
 import {
+  listPolls,
+  getAllTags,
   createPoll,
   updatePoll,
   deletePoll,
-  listPolls,
-  tagPoll,
-  untagPoll,
-  getPollTags,
-  getAllTags,
-  searchPollsByTag,
-  searchPolls,
-  addPollOption,
-  deletePollOption,
   voteOption,
+  searchPollsByTagNames,
 } from "./service/poll";
+import { pollSchema, tagSchema, voteSchema } from "./schema";
 
 // Import schemas
-import { pollSchema, voteSchema, tagSchema, pollOptionSchema } from "./schema";
 
 const app = new OpenAPIHono<{
   Variables: {
@@ -84,7 +78,7 @@ app.openapi(
       poll: pollSchema,
     }),
     resSchema: z.object({
-      poll: pollSchema.optional(),
+      poll: pollSchema,
     }),
   }),
   async (c) => {
@@ -104,17 +98,15 @@ app.openapi(
     reqSchema: z.object({
       poll: pollSchema,
     }),
-    resSchema: z.object({
-      poll: pollSchema.optional(),
-    }),
+    resSchema: z.object({}),
   }),
   async (c) => {
     const userId = getUserId(c);
     const { poll } = c.req.valid("json");
     // Ensure userId is set in the poll
     poll.userId = userId;
-    const updatedPoll = await updatePoll(poll);
-    return c.json({ poll: updatedPoll });
+    await updatePoll(poll);
+    return c.json({});
   }
 );
 
@@ -125,15 +117,13 @@ app.openapi(
     reqSchema: z.object({
       pollId: z.string(),
     }),
-    resSchema: z.object({
-      success: z.boolean().optional(),
-    }),
+    resSchema: z.object({}),
   }),
   async (c) => {
     const userId = getUserId(c);
     const { pollId } = c.req.valid("json");
-    const success = await deletePoll(pollId, userId);
-    return c.json({ success });
+    await deletePoll(pollId, userId);
+    return c.json({});
   }
 );
 
@@ -157,44 +147,6 @@ app.openapi(
   }
 );
 
-//add option for a poll
-app.openapi(
-  geneRoute({
-    path: "/poll/addOption",
-    reqSchema: z.object({
-      pollId: z.string(),
-      option: pollOptionSchema,
-    }),
-    resSchema: z.object({}),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const { pollId, option } = c.req.valid("json");
-    await addPollOption({ pollId, option, userId });
-    return c.json({});
-  }
-);
-
-//delete option for a poll
-app.openapi(
-  geneRoute({
-    path: "/poll/deleteOption",
-    reqSchema: z.object({
-      pollId: z.string(),
-      optionId: z.string(),
-    }),
-    resSchema: z.object({
-      success: z.boolean().optional(),
-    }),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const { pollId, optionId } = c.req.valid("json");
-    await deletePollOption({ pollId, optionId, userId });
-    return c.json({});
-  }
-);
-
 // Vote on a poll
 app.openapi(
   geneRoute({
@@ -202,81 +154,15 @@ app.openapi(
     reqSchema: z.object({
       vote: voteSchema,
     }),
-    resSchema: z.object({
-      success: z.boolean().optional(),
-    }),
+    resSchema: z.object({}),
   }),
   async (c) => {
     const userId = getUserId(c);
     const { vote } = c.req.valid("json");
     // Ensure userId is set in the vote
     vote.userId = userId;
-    const success = await voteOption(vote);
-    return c.json({ success });
-  }
-);
-
-// Tag a poll
-app.openapi(
-  geneRoute({
-    path: "/poll/tag",
-    reqSchema: z.object({
-      pollId: z.string(),
-      tag: tagSchema,
-    }),
-    resSchema: z.object({}),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const { tag, pollId } = c.req.valid("json");
-    // Ensure userId is set in the tag, if schema expects it or tag object is reused
-    tag.userId = userId;
-    await tagPoll(pollId, tag.name, userId);
+    await voteOption(vote);
     return c.json({});
-  }
-);
-
-// Untag a poll
-app.openapi(
-  geneRoute({
-    path: "/poll/untag",
-    reqSchema: z.object({
-      pollId: z.string(),
-      tag: tagSchema,
-    }),
-    resSchema: z.object({
-      success: z.boolean().optional(),
-    }),
-  }),
-  async (c) => {
-    const userId = getUserId(c);
-    const { tag, pollId } = c.req.valid("json");
-    tag.userId = userId; // Ensure userId is set in the tag, if schema expects it or tag object is reused
-    if (!tag.id || typeof tag.id !== "string" || tag.id.trim() === "") {
-      // TODO: Consider using HonoHttpException for a more standard error response.
-      // For now, return 200 with success:false to match the defined resSchema type.
-      return c.json({ success: false });
-    }
-    const success = await untagPoll(pollId, tag.id, userId);
-    return c.json({ success });
-  }
-);
-
-// Get poll tags
-app.openapi(
-  geneRoute({
-    path: "/poll/getTags",
-    reqSchema: z.object({
-      pollId: z.string(),
-    }),
-    resSchema: z.object({
-      tags: z.array(tagSchema).optional(),
-    }),
-  }),
-  async (c) => {
-    const { pollId } = c.req.valid("json");
-    const tags = await getPollTags(pollId);
-    return c.json({ tags });
   }
 );
 
@@ -301,37 +187,16 @@ app.openapi(
   geneRoute({
     path: "/poll/searchByTag",
     reqSchema: z.object({
-      tagId: z.string(),
-      limit: z.number().optional(),
-      offset: z.number().optional(),
+      tagNames: z.array(z.string()),
     }),
     resSchema: z.object({
       polls: z.array(pollSchema),
     }),
   }),
   async (c) => {
-    const { tagId, limit, offset } = c.req.valid("json");
-    const polls = await searchPollsByTag(tagId, limit, offset);
-    return c.json({ polls });
-  }
-);
-
-// Search polls by question or option text
-app.openapi(
-  geneRoute({
-    path: "/poll/search",
-    reqSchema: z.object({
-      query: z.string(),
-      limit: z.number().optional(),
-      offset: z.number().optional(),
-    }),
-    resSchema: z.object({
-      polls: z.array(pollSchema),
-    }),
-  }),
-  async (c) => {
-    const { query, limit, offset } = c.req.valid("json");
-    const polls = await searchPolls(query, limit, offset);
+    const userId = getUserId(c);
+    const { tagNames } = c.req.valid("json");
+    const polls = await searchPollsByTagNames(userId, tagNames);
     return c.json({ polls });
   }
 );
