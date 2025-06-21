@@ -1,7 +1,7 @@
 {
   "name": "exp-ai-back",
   "scripts": {
-    "dev": "bun run --hot src/index.ts",
+    "dev": "bun run --hot --inspect src/index.ts",
     "start": "NODE_ENV=production bun run src/index.ts",
     "build": "bun build src/index.ts --target bun --outdir dist",
     "drizzle:generate": "drizzle-kit generate",

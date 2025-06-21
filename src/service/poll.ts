@@ -9,7 +9,6 @@ import {
   inArray,
   desc,
   count as dslCount,
-  ilike,
   SQL,
   asc,
 } from "drizzle-orm";
@@ -51,7 +50,6 @@ export async function listPolls(
     offset: offset,
     orderBy: [desc(schemaDb.poll.createdAt)],
   });
-
   const pollsPromise = pollsTableRows.map(async (simplePollRow) => {
     const tags = await getPollTags(simplePollRow.id, userId);
     const pollOptions = await getOptionsByPollId(simplePollRow.id);
@@ -91,11 +89,13 @@ export async function getPollTags(
     .orderBy(desc(schemaDb.pollTag.createdAt));
 
   // 转换为 Tag[]
-  const tags: Tag[] = tagsData.map((tag) => ({
-    name: tag.name,
-    createdAt: toISOStringOptional(tag.createdAt),
-    userId: tag.userId || undefined,
-  }));
+  const tags: Tag[] = tagsData.map((tag) => {
+    return {
+      name: tag.name,
+      createdAt: toISOStringOptional(tag.createdAt),
+      userId: tag.userId || undefined,
+    };
+  });
   return tags;
 }
 
@@ -117,18 +117,18 @@ export async function getAllTags(userId: string): Promise<Tag[]> {
   // 转换为 Tag[]
   const tags: Tag[] = tagsData.map((tag) => ({
     name: tag.name,
-    createdAt: toISOStringOptional(tag.createdAt as Date),
+    createdAt: toISOStringOptional(new Date(tag.createdAt as string)),
     userId,
   }));
   return tags;
 }
 
-export async function createPoll(poll: Poll): Promise<Poll> {
+export async function createPoll(poll: Poll, userId: string): Promise<Poll> {
   const pollData = await db
     .insert(schemaDb.poll)
     .values({
       question: poll.question,
-      userId: poll.userId!,
+      userId: userId,
       extraInfo: poll.extraInfo,
     })
     .returning();
@@ -154,7 +154,7 @@ export async function createPoll(poll: Poll): Promise<Poll> {
       .values({
         pollId: pollId,
         name: tag.name,
-        userId: tag.userId!,
+        userId: userId,
       })
       .returning();
     return pollTagData[0];
@@ -183,21 +183,27 @@ export async function createPoll(poll: Poll): Promise<Poll> {
   return newPoll;
 }
 
-export async function updatePoll(poll: Poll) {
+export async function updatePoll(poll: Poll, userId: string) {
   // update poll
-  db.update(schemaDb.poll)
+  await db
+    .update(schemaDb.poll)
     .set({
       question: poll.question,
       extraInfo: poll.extraInfo,
       updatedAt: new Date(),
     })
     .where(
-      and(eq(schemaDb.poll.id, poll.id!), eq(schemaDb.poll.isDeleted, false))
+      and(
+        eq(schemaDb.poll.id, poll.id!),
+        eq(schemaDb.poll.isDeleted, false),
+        eq(schemaDb.poll.userId, userId)
+      )
     );
 
   //update poll options
   poll.pollOptions.forEach(async (opt) => {
-    db.update(schemaDb.pollOption)
+    await db
+      .update(schemaDb.pollOption)
       .set({
         index: opt.index,
         text: opt.text,
@@ -213,24 +219,54 @@ export async function updatePoll(poll: Poll) {
   });
 
   //update poll tags
-  poll.tags.forEach(async (tag) => {
-    db.update(schemaDb.pollTag)
+  //find all tag name in this poll
+  const pollTags = await db.query.pollTag.findMany({
+    where: and(
+      eq(schemaDb.pollTag.pollId, poll.id!),
+      eq(schemaDb.pollTag.isDeleted, false)
+    ),
+  });
+
+  //get should insert tag names
+  const shouldInsertTagNames = poll.tags
+    .filter((tag) => !pollTags.some((t) => t.name === tag.name))
+    .map((tag) => tag.name);
+  //insert should delete tag names
+  const shouldDeleteTagNames = pollTags
+    .filter((tag) => !poll.tags.some((t) => t.name === tag.name))
+    .map((tag) => tag.name);
+
+  //insert should insert tag names
+  const insertTagPromises = shouldInsertTagNames.map(async (name) => {
+    await db.insert(schemaDb.pollTag).values({
+      pollId: poll.id!,
+      name: name,
+      userId: userId,
+    });
+  });
+  //delete should delete tag names
+  const deleteTagPromises = shouldDeleteTagNames.map(async (name) => {
+    await db
+      .update(schemaDb.pollTag)
       .set({
-        name: tag.name,
+        isDeleted: true,
         updatedAt: new Date(),
       })
       .where(
         and(
-          eq(schemaDb.pollTag.id, tag.id!),
-          eq(schemaDb.pollTag.isDeleted, false)
+          eq(schemaDb.pollTag.name, name),
+          eq(schemaDb.pollTag.pollId, poll.id!)
         )
       );
   });
+  await Promise.all(insertTagPromises);
+  await Promise.all(deleteTagPromises);
 }
 
 export async function deletePoll(pollId: string, userId: string) {
   // delete poll
-  db.update(schemaDb.poll)
+  const pollsPromise = db
+    .update(schemaDb.poll)
     .set({
       isDeleted: true,
       updatedAt: new Date(),
@@ -238,7 +274,8 @@ export async function deletePoll(pollId: string, userId: string) {
     .where(and(eq(schemaDb.poll.id, pollId), eq(schemaDb.poll.userId, userId)));
 
   // delete poll options
-  db.update(schemaDb.pollOption)
+  const pollOptionsPromise = db
+    .update(schemaDb.pollOption)
     .set({
       isDeleted: true,
       updatedAt: new Date(),
@@ -246,12 +283,15 @@ export async function deletePoll(pollId: string, userId: string) {
     .where(eq(schemaDb.pollOption.pollId, pollId));
 
   // delete poll tags
-  db.update(schemaDb.pollTag)
+  const pollTagsPromise = db
+    .update(schemaDb.pollTag)
     .set({
       isDeleted: true,
       updatedAt: new Date(),
     })
     .where(eq(schemaDb.pollTag.pollId, pollId));
+
+  await Promise.all([pollsPromise, pollOptionsPromise, pollTagsPromise]);
 }
 
 export async function voteOption(vote: Vote) {
@@ -266,7 +306,7 @@ export async function voteOption(vote: Vote) {
   await db
     .update(schemaDb.pollOption)
     .set({
-      count: sql`count + ${vote.diff}`,
+      count: sql`GREATEST(count + ${vote.diff}, 0)`,
     })
     .where(eq(schemaDb.pollOption.id, vote.optionId));
 }

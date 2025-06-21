@@ -60,6 +60,23 @@ app.use("*", async (c, next) => {
 // Auth endpoints handler
 app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
 
+app.openapi(
+  geneRoute({
+    path: "/login/check",
+    reqSchema: z.object({}),
+    resSchema: z.object({
+      hasLogin: z.boolean(),
+    }),
+  }),
+  async (c) => {
+    const userId = c.var.user?.id;
+    if (!userId) {
+      return c.json({ hasLogin: false });
+    }
+    return c.json({ hasLogin: true });
+  }
+);
+
 const getUserId = (c: Context): string => {
   const userId = c.var?.user?.id;
   if (!userId) {
@@ -86,7 +103,7 @@ app.openapi(
     const { poll } = c.req.valid("json");
     // Ensure userId is set in the poll
     poll.userId = userId;
-    const createdPoll = await createPoll(poll);
+    const createdPoll = await createPoll(poll, userId);
     return c.json({ poll: createdPoll });
   }
 );
@@ -105,7 +122,7 @@ app.openapi(
     const { poll } = c.req.valid("json");
     // Ensure userId is set in the poll
     poll.userId = userId;
-    await updatePoll(poll);
+    await updatePoll(poll, userId);
     return c.json({});
   }
 );
